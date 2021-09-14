@@ -1,0 +1,18 @@
+<!--
+/*
+ * Copyright (c) 2021 PayGate (Pty) Ltd
+ *
+ * Author: App Inlet (Pty) Ltd
+ *
+ * Released under the GNU General Public License
+ */
+-->
+<page xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" layout="1column"
+      xsi:noNamespaceSchemaLocation="../../../../../../../lib/internal/Magento/Framework/View/Layout/etc/page_configuration.xsd">
+    <body>
+        <referenceContainer name="content">
+            <block class="PayGate\PayHost\Block\Payment\Request" name="payhost_redirect_success"
+                   template="PayGate_PayHost::success.phtml" cacheable="false"/>
+        </referenceContainer>
+    </body>
+</page>
