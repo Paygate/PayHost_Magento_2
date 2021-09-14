@@ -1,7 +1,7 @@
 # PayHost_Magento_2
 ## PayGate PayHost (tokenization) plugin v1.0.0 for Magento v2.4.3
 
-This is the PayGate PayHost (with tokenization) for Magento 2. Please feel free to contact the PayGate support team at support@paygate.co.za should you require any assistance.
+This is PayGate PayHost (with tokenization) for Magento 2. Please feel free to contact the PayGate support team at support@paygate.co.za should you require any assistance.
 
 This module is in the first release; we suggest thorough testing with your use case before proceeding to a live environment.
 
