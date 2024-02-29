@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
 /*
- * Copyright (c) 2020 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -14,7 +14,7 @@
         <section id="payment">
             <group id="payhost" translate="label" type="text" sortOrder="1" showInDefault="1" showInWebsite="1"
                    showInStore="1">
-                <label>PayGate PayHost</label>
+                <label>Paygate Payhost</label>
                 <field id="active" translate="label" type="select" sortOrder="1" showInDefault="1" showInWebsite="1"
                        showInStore="1">
                     <label>Enabled</label>
@@ -41,6 +41,11 @@
                 <field id="paygate_id" translate="label" type="text" sortOrder="5" showInDefault="1" showInWebsite="1"
                        showInStore="1">
                     <label>PayGate ID</label>
+                </field>
+                <field id="payhost_cc_vault_active" translate="label" type="select" sortOrder="5" showInDefault="1"
+                       showInWebsite="1" showInStore="0">
+                    <label>Enable PayVault on Checkout</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                 </field>
                 <field id="allowed_carrier" translate="label" type="multiselect" sortOrder="6" showInDefault="1"
                        showInWebsite="1" showInStore="1">

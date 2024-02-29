@@ -1,6 +1,7 @@
 <?php
+
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -14,7 +15,9 @@ use Magento\Directory\Model\CurrencyFactory;
 use Magento\Framework\App\Config\BaseFactory;
 use Magento\Framework\App\Helper\AbstractHelper;
 use Magento\Framework\App\Helper\Context;
+use Magento\Framework\DataObject;
 use Magento\Framework\DB\Transaction as DBTransaction;
+use Magento\Payment\Model\InfoInterface;
 use Magento\Quote\Model\Quote;
 use Magento\Sales\Api\Data\TransactionSearchResultInterfaceFactory;
 use Magento\Sales\Model\Order;
@@ -31,11 +34,11 @@ use Psr\Log\LoggerInterface;
 use SimpleXMLElement;
 
 /**
- * PayGate Data helper
+ * Paygate Data helper
  */
 class Data extends AbstractHelper
 {
-    const PAYHOSTURL = "https://secure.paygate.co.za/payhost/process.trans";
+    public const PAYHOSTURL = "https://secure.paygate.co.za/payhost/process.trans";
 
     /**
      * Cache for shouldAskToCreateBillingAgreement()
@@ -101,8 +104,15 @@ class Data extends AbstractHelper
      * @param Context $context
      * @param \Magento\Payment\Helper\Data $paymentData
      * @param BaseFactory $configFactory
+     * @param PayGateConfig $paygateconfig
      * @param StoreManagerInterface $storeManager
      * @param CurrencyFactory $currencyFactory
+     * @param Builder $_transactionBuilder
+     * @param TransactionSearchResultInterfaceFactory $transactionSearchResultInterfaceFactory
+     * @param OrderSender $OrderSender
+     * @param DBTransaction $dbTransaction
+     * @param InvoiceService $invoiceService
+     * @param InvoiceSender $invoiceSender
      * @param array $methodCodes
      */
     public function __construct(
@@ -146,8 +156,7 @@ class Data extends AbstractHelper
     }
 
     /**
-     * Check whether customer should be asked confirmation whether to sign a billing agreement
-     * should always return false.
+     * Check whether customer should be asked confirmation to sign a billing agreement.
      *
      * @return bool
      */
@@ -183,11 +192,14 @@ class Data extends AbstractHelper
         return $result;
     }
 
-    /*
-    ** Convert Currency to Order Currency
-    ** If both currency are same dont do any changes
-    ** store_currency_code & order_currency_code are fields in sales_order table
-    */
+    /**
+     * Convert Currency to Order Currency. If both currency are same dont do any changes
+     *
+     * @param DataObject|InfoInterface $order
+     * @param int $price
+     *
+     * @return int
+     */
     public function convertToOrderCurrency($order, $price)
     {
         $storeCurrency = $order->getStoreCurrencyCode();
@@ -201,6 +213,14 @@ class Data extends AbstractHelper
         return $price;
     }
 
+    /**
+     * Get payment transaction data from the db
+     *
+     * @param DataObject|InfoInterface $payment
+     * @param int $txn_id
+     *
+     * @return int
+     */
     public function getTransactionData($payment, $txn_id)
     {
         $transactionSearchResult = $this->transactionSearchResultInterfaceFactory;
@@ -208,7 +228,15 @@ class Data extends AbstractHelper
         return $transactionSearchResult->create()->addPaymentIdFilter($payment->getId())->getFirstItem();
     }
 
-    public function createTransaction($order = null, $paymentData = array())
+    /**
+     * Create transanction
+     *
+     * @param DataObject|InfoInterface $order
+     * @param DataObject|InfoInterface $paymentData
+     *
+     * @return mixed
+     */
+    public function createTransaction($order = null, $paymentData = [])
     {
         try {
             // Get payment object from order object
@@ -249,15 +277,27 @@ class Data extends AbstractHelper
         }
     }
 
+    /**
+     * Get the configuration data
+     *
+     * @param string $field
+     *
+     * @return string
+     */
     public function getConfigData($field)
     {
         return $this->_paygateconfig->getConfig($field);
     }
 
+    /**
+     * Get Paygate credentials
+     *
+     * @return array
+     */
     public function getPayGateCredentials()
     {
         // If NOT test mode, use normal credentials
-        $cred = array();
+        $cred = [];
         if ($this->getConfigData('test_mode') != '1') {
             $cred['paygateId'] = $this->getConfigData('paygate_id');
             $cred['password']  = $this->getConfigData('encryption_key');
@@ -269,23 +309,37 @@ class Data extends AbstractHelper
         return $cred;
     }
 
+    /**
+     * Get the query result
+     *
+     * @param int $transaction_id
+     *
+     * @return int
+     */
     public function getQueryResult($transaction_id)
     {
         $queryFields = $this->prepareQueryXml($transaction_id);
         $response    = $this->curlPost(self::PAYHOSTURL, $queryFields);
         $respArray   = $this->formatXmlToArray($response);
-        $ns2Status   = $respArray['ns2SingleFollowUpResponse']['ns2QueryResponse']['ns2Status'];
 
-        return $ns2Status;
+        return $respArray['ns2SingleFollowUpResponse']['ns2QueryResponse']['ns2Status'];
     }
 
+    /**
+     * Send a curl post with the xml data
+     *
+     * @param string $url
+     * @param XML $xml
+     *
+     * @return XML
+     */
     public function curlPost($url, $xml)
     {
         $curl = curl_init();
 
         curl_setopt_array(
             $curl,
-            array(
+            [
                 CURLOPT_URL            => self::PAYHOSTURL,
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_ENCODING       => "",
@@ -295,11 +349,11 @@ class Data extends AbstractHelper
                 CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
                 CURLOPT_CUSTOMREQUEST  => "POST",
                 CURLOPT_POSTFIELDS     => "$xml",
-                CURLOPT_HTTPHEADER     => array(
+                CURLOPT_HTTPHEADER     => [
                     "Content-Type: text/xml",
                     "SOAPAction: WebPaymentRequest"
-                ),
-            )
+                ],
+            ]
         );
 
         $response = curl_exec($curl);
@@ -309,6 +363,13 @@ class Data extends AbstractHelper
         return $response;
     }
 
+    /**
+     * Process the refund
+     *
+     * @param XML $response
+     *
+     * @return XML
+     */
     public function formatXmlToArray($response)
     {
         $response = preg_replace("/(<\/?)(\w+):([^>]*>)/", "$1$2$3", $response);
@@ -318,6 +379,13 @@ class Data extends AbstractHelper
         return json_decode(json_encode((array)$body), true);
     }
 
+    /**
+     * Prepare the xml from the query
+     *
+     * @param XML $pay_request_id
+     *
+     * @return XML
+     */
     public function prepareQueryXml($pay_request_id)
     {
         $cred      = $this->getPayGateCredentials();
@@ -340,9 +408,15 @@ class Data extends AbstractHelper
             </SOAP-ENV:Envelope>';
     }
 
+    /**
+     * Update the payment status of an order
+     *
+     * @param DataObject|InfoInterface $order
+     * @param array $resp
+     */
     public function updatePaymentStatus($order, $resp)
     {
-        if (is_array($resp) && (count($resp) > 0)) {
+        if (!empty($resp)) {
             if ($resp['ns2TransactionStatusCode'] == 1) {
                 $status = Order::STATE_PROCESSING;
                 $order->setStatus($status);
@@ -363,6 +437,11 @@ class Data extends AbstractHelper
         }
     }
 
+    /**
+     * Generate the order invoice
+     *
+     * @param DataObject|InfoInterface $order
+     */
     public function generateInvoice($order)
     {
         $order_successful_email = $this->getConfigData('order_email');

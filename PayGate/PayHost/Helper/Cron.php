@@ -1,6 +1,7 @@
 <?php
+
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -15,7 +16,7 @@ use Magento\Framework\App\Helper\Context;
 use Psr\Log\LoggerInterface;
 
 /**
- * PayGate Data helper
+ * Paygate Data helper
  */
 class Cron extends AbstractHelper
 {
@@ -27,14 +28,10 @@ class Cron extends AbstractHelper
 
     /**
      * @param Context $context
-     * @param \Magento\Payment\Helper\Data $paymentData
-     * @param BaseFactory $configFactory
-     * @param array $methodCodes
      */
     public function __construct(
         Context $context
     ) {
         $this->_logger = $context->getLogger();
     }
-
 }

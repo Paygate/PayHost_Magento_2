@@ -1,6 +1,7 @@
 <?php
+
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -18,6 +19,7 @@ use Magento\Framework\UrlInterface;
 use Magento\Framework\View\Asset\Repository;
 use Magento\Payment\Helper\Data as PaymentHelper;
 use Magento\Payment\Model\Method\AbstractMethod;
+use Magento\Vault\Api\PaymentTokenManagementInterface;
 use PayGate\PayHost\Helper\Data as PaygateHelper;
 use Psr\Log\LoggerInterface;
 
@@ -79,13 +81,22 @@ class PaygateConfigProvider implements ConfigProviderInterface
      * @var RequestInterface
      */
     protected $request;
+    /**
+     * @var \Magento\Vault\Api\PaymentTokenManagementInterface
+     */
+    private PaymentTokenManagementInterface $tokenManagement;
 
     /**
+     * @param LoggerInterface $logger
      * @param ConfigFactory $configFactory
      * @param ResolverInterface $localeResolver
      * @param CurrentCustomer $currentCustomer
-     * @param PaygateHelper $paymentHelper
+     * @param PaygateHelper $paygateHelper
      * @param PaymentHelper $paymentHelper
+     * @param Repository $assetRepo
+     * @param UrlInterface $urlBuilder
+     * @param RequestInterface $request
+     * @param PaymentTokenManagementInterface $tokenManagement
      */
     public function __construct(
         LoggerInterface $logger,
@@ -96,7 +107,8 @@ class PaygateConfigProvider implements ConfigProviderInterface
         PaymentHelper $paymentHelper,
         Repository $assetRepo,
         UrlInterface $urlBuilder,
-        RequestInterface $request
+        RequestInterface $request,
+        PaymentTokenManagementInterface $tokenManagement
     ) {
         $this->_logger = $logger;
         $pre           = __METHOD__ . ' : ';
@@ -110,6 +122,7 @@ class PaygateConfigProvider implements ConfigProviderInterface
         $this->assetRepo       = $assetRepo;
         $this->urlBuilder      = $urlBuilder;
         $this->request         = $request;
+        $this->tokenManagement = $tokenManagement;
 
         foreach ($this->methodCodes as $code) {
             $this->methods[$code] = $this->paymentHelper->getMethodInstance($code);
@@ -119,18 +132,42 @@ class PaygateConfigProvider implements ConfigProviderInterface
     }
 
     /**
-     * {@inheritdoc}
+     * @inheritdoc
      */
-    public function getConfig()
+    public function getConfig(): array
     {
         $pre = __METHOD__ . ' : ';
+
+        // Cards
+        $cards     = [];
+        $cardCount = 0;
+        if ($customerId = $this->currentCustomer->getCustomerId()) {
+            $cardList = $this->tokenManagement->getListByCustomerId($customerId);
+            foreach ($cardList as $card) {
+                if ($card->getIsActive() && $card->getIsVisible() && $card->getPaymentMethodCode() === 'payhost') {
+                    $cardDetail = json_decode($card->getTokenDetails());
+                    $cards[]    = [
+                        'masked_cc' => $cardDetail->maskedCC,
+                        'token'     => $card->getPublicHash(),
+                        'card_type' => $cardDetail->type,
+                    ];
+                    $cardCount++;
+                }
+            }
+            $isVault = $this->config->isVault();
+        } else {
+            $isVault = false;
+        }
 
         $this->_logger->debug($pre . 'bof');
         $payHostConfig = [
             'payment' => [
                 'payhost' => [
                     'paymentAcceptanceMarkSrc'  => $this->config->getPaymentMarkImageUrl(),
-                    'paymentAcceptanceMarkHref' => $this->config->getPaymentMarkWhatIsPaygate()
+                    'paymentAcceptanceMarkHref' => $this->config->getPaymentMarkWhatIsPaygate(),
+                    'isVault'                   => $isVault,
+                    'saved_card_data'           => json_encode($cards),
+                    'card_count'                => $cardCount,
                 ],
             ],
         ];

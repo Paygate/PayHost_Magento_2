@@ -1,6 +1,7 @@
 <?php
-/**
- * Copyright (c) 2021 PayGate (Pty) Ltd
+
+/*
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -77,7 +78,7 @@ class Form extends \Magento\Payment\Block\Form
         array $data = []
     ) {
         $this->_logger = $context->getLogger();
-        $pre = __METHOD__ . " : ";
+        $pre           = __METHOD__ . " : ";
         $this->_logger->debug($pre . 'bof');
         $this->_paygateData         = $paygateData;
         $this->paygateConfigFactory = $paygateConfigFactory;
@@ -114,5 +115,4 @@ class Form extends \Magento\Payment\Block\Form
         $this->_config = $this->paygateConfigFactory->create()->setMethod($this->getMethodCode());
         parent::_construct();
     }
-
 }

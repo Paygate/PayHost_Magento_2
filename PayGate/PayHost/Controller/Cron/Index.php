@@ -1,6 +1,7 @@
 <?php
+
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -13,11 +14,12 @@ use DateInterval;
 use DateTime;
 use Magento\Framework\App\Area;
 use Magento\Framework\App\ObjectManager;
+use Magento\Framework\View\Result\PageFactory;
 use Magento\Sales\Model\Order;
 use Magento\Sales\Model\Order\Invoice;
 use Magento\Sales\Model\Order\Payment\Transaction;
 use PayGate\PayHost\Controller\AbstractPaygate;
-
+use PayGate\PayHost\Helper\Data;
 
 /**
  * Responsible for loading page content.
@@ -27,19 +29,24 @@ use PayGate\PayHost\Controller\AbstractPaygate;
  */
 class Index extends AbstractPaygate
 {
-
+    /**
+     * Execute the Index method
+     */
     public function execute()
     {
         $this->state->emulateAreaCode(
             Area::AREA_FRONTEND,
             function () {
-                $this->_logger->error('Starting PayGate Payhost Cron');
+                $this->_logger->error('Starting Paygate Payhost Cron');
                 $this->updateForPendingPayGateOrders();
-                $this->_logger->error('PayGate Payhost Cron Ended');
+                $this->_logger->error('Paygate Payhost Cron Ended');
             }
         );
     }
 
+    /**
+     * Update the pending order
+     */
     public function updateForPendingPayGateOrders()
     {
         $cutoffTime = (new DateTime())->sub(new DateInterval('PT10M'))->format('Y-m-d H:i:s');
@@ -54,12 +61,12 @@ class Index extends AbstractPaygate
         $this->_logger->info('Orders for cron: ' . json_encode($orderIds));
 
         foreach ($orderIds as $orderId) {
-            $order_id                = $orderId['entity_id'];
-            $order                   = $this->orderRepository->get($order_id);
+            $order_id = $orderId['entity_id'];
+            $order = $this->orderRepository->get($order_id);
             $transactionSearchResult = $this->transactionSearchResultInterfaceFactory;
-            $transaction             = $transactionSearchResult->create()->addOrderIdFilter($order_id)->getFirstItem();
-            $PaymentTitle            = $order->getPayment()->getMethodInstance()->getTitle();
-            $transactionData         = $transaction->getData();
+            $transaction = $transactionSearchResult->create()->addOrderIdFilter($order_id)->getFirstItem();
+            $PaymentTitle = $order->getPayment()->getMethodInstance()->getTitle();
+            $transactionData = $transaction->getData();
             if (isset($transactionData['additional_information']['raw_details_info'])) {
                 $add_info = $transactionData['additional_information']['raw_details_info'];
                 if (isset($add_info['PAYMENT_TITLE'])) {
@@ -69,8 +76,8 @@ class Index extends AbstractPaygate
 
             $transactionId = $transaction->getData('txn_id');
 
-            if ( ! empty($transactionId) & $PaymentTitle == "PAYGATE_PAYHOST") {
-                $_paygatehelper = ObjectManager::getInstance()->get('\PayGate\PayHost\Helper\Data');
+            if (!empty($transactionId) & $PaymentTitle == "PAYGATE_PAYHOST") {
+                $_paygatehelper = ObjectManager::getInstance()->get(Data::class);
                 $result         = $_paygatehelper->getQueryResult($transactionId);
 
                 if (isset($result['ns2PaymentType'])) {
@@ -85,6 +92,4 @@ class Index extends AbstractPaygate
             }
         }
     }
-
-
 }

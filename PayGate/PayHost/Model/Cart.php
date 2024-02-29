@@ -1,6 +1,7 @@
 <?php
+
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -31,7 +32,7 @@ class Cart extends \Magento\Payment\Model\Cart
     {
         $this->_collectItemsAndAmounts();
 
-        if ( ! $this->_areAmountsValid) {
+        if (!$this->_areAmountsValid) {
             $subtotal = $this->getSubtotal() + $this->getTax();
 
             if (empty($this->_transferFlags[self::AMOUNT_SHIPPING])) {
@@ -78,7 +79,7 @@ class Cart extends \Magento\Payment\Model\Cart
     }
 
     /**
-     * Check the line items and totals according to PayGate business logic limitations
+     * Check the line items and totals according to Paygate business logic limitations
      *
      * @return void
      */
@@ -118,14 +119,14 @@ class Cart extends \Magento\Payment\Model\Cart
 
         $areItemsValid = $areItemsValid && $this->_areAmountsValid;
 
-        if ( ! $areItemsValid) {
+        if (!$areItemsValid) {
             $this->_salesModelItems = [];
             $this->_customItems     = [];
         }
     }
 
     /**
-     * Import items from sales model with workarounds for PayGate
+     * Import items from sales model with workarounds for Paygate
      *
      * @return void
      */
@@ -186,7 +187,7 @@ class Cart extends \Magento\Payment\Model\Cart
      * - Apply Customer Tax = After Discount
      * - Create a cart price rule with % discount applied to the Shipping Amount
      * - Run shopping cart and estimate shipping
-     * - Go to PayGate
+     * - Go to Paygate
      *
      * @param SalesModelInterface $salesEntity
      *

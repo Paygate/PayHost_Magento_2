@@ -1,6 +1,6 @@
 <?php
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -8,24 +8,22 @@
  */
 
 ?>
-<h2><?php
-    echo $this->escapeHtml($this->getMessage()); ?></h2>
+<h2><?=
+    /** @noinspection PhpUndefinedVariableInspection */
+    $block->escapeHtml($block->getMessage()); ?></h2>
 
-<form name="<?php
-echo $this->escapeHtml($this->getName()); ?>"
-      id="<?php
-      echo $this->escapeHtml($this->getId()); ?>"
-      action="<?php
-      echo $this->escapeHtml($this->getFormAction()); ?>"
+<form name="<?= $block->escapeHtml($block->getName()); ?>"
+      id="<?= $block->escapeHtml($block->getId()); ?>"
+      action="<?= $block->escapeHtml($block->getFormAction()); ?>"
       method="post">
 
     <?php
-    foreach ($this->getFormData() as $item => $value): ?>
-        <input type="hidden" name="<?php
-        echo $this->escapeHtml($item); ?>" value="<?php
-        echo $this->escapeHtml($value); ?>" size="200">
+    foreach ($block->getFormData() as $item => $value): ?>
+        <input type="hidden" name="<?=
+        $block->escapeHtml($item); ?>" value="<?=
+        $block->escapeHtml($value); ?>" size="200">
     <?php
     endforeach; ?>
 </form>
-<?php
-echo $this->getSubmitForm(); ?>
+<?= /* @noEscape */
+$block->getSubmitForm(); ?>

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -21,7 +21,7 @@ define(
     rendererList.push(
       {
         type: 'payhost',
-        component: 'PayGate_PayHost/js/view/payment/method-renderer/paygate-method'
+        component: 'PayGate_PayHost/js/view/payment/method-renderer/payhost-method'
       }
     )
     /** Add view logic here if needed */

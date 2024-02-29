@@ -1,6 +1,7 @@
 <?php
+
 /*
- * Copyright (c) 2020 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -16,5 +17,4 @@ use PayGate\PayHost\Controller\Cron\Index as CronIndex;
 
 class CronQuery extends CronIndex
 {
-
 }
