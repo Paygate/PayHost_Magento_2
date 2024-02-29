@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -28,7 +28,7 @@
                                                             <item name="children" xsi:type="array">
                                                                 <item name="paygate-payhost-payments" xsi:type="array">
                                                                     <item name="component" xsi:type="string">
-                                                                        PayGate_PayHost/js/view/payment/paygate-payments
+                                                                        PayGate_PayHost/js/view/payment/payhost-payments
                                                                     </item>
                                                                     <item name="methods" xsi:type="array">
                                                                         <item name="payhost" xsi:type="array">

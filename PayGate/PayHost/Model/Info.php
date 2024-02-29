@@ -1,21 +1,20 @@
 <?php
+
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
  * Released under the GNU General Public License
  */
 
-// @codingStandardsIgnoreFile
-
 namespace PayGate\PayHost\Model;
 
 /**
- * PayGate payment information model
+ * Paygate payment information model
  *
- * Aware of all PayGate payment methods
- * Collects and provides access to PayGate-specific payment data
+ * Aware of all Paygate payment methods
+ * Collects and provides access to Paygate-specific payment data
  * Provides business logic information about payment flow
  */
 class Info

@@ -1,6 +1,7 @@
 <?php
+
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -72,9 +73,14 @@ class Request extends Template
         $this->_paymentMethod  = $paymentMethod;
     }
 
+    /**
+     * Prepare the layout
+     *
+     * @return mixed
+     */
     public function _prepareLayout()
     {
-        $this->setMessage('Redirecting to PayGate')
+        $this->setMessage('Redirecting to Paygate')
              ->setId('paygate_checkout')
              ->setName('paygate_checkout')
              ->setFormMethod('POST')
@@ -86,5 +92,4 @@ class Request extends Template
 
         return parent::_prepareLayout();
     }
-
 }

@@ -1,6 +1,7 @@
 <?php
+
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -14,7 +15,11 @@ use PayGate\PayHost\Controller\AbstractPaygate;
 
 class Order extends AbstractPaygate
 {
-
+    /**
+     * Request order data and get a response json object
+     *
+     * @return object
+     */
     public function execute()
     {
         $this->resultFactory->create(ResultFactory::TYPE_PAGE);

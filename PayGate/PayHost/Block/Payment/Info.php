@@ -1,6 +1,7 @@
 <?php
+
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -14,7 +15,7 @@ use Magento\Payment\Model\Config;
 use PayGate\PayHost\Model\InfoFactory;
 
 /**
- * PayGate common payment info block
+ * Paygate common payment info block
  * Uses default templates
  */
 class Info extends \Magento\Payment\Block\Info
@@ -45,5 +46,4 @@ class Info extends \Magento\Payment\Block\Info
         $this->_PaygateInfoFactory = $PaygateInfoFactory;
         parent::__construct($context, $data);
     }
-
 }

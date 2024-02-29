@@ -1,6 +1,7 @@
 <?php
+
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -22,11 +23,11 @@ abstract class AbstractConfig implements ConfigInterface
     /**
      * Payment actions
      */
-    const PAYMENT_ACTION_SALE = 'Sale';
+    public const PAYMENT_ACTION_SALE = 'Sale';
 
-    const PAYMENT_ACTION_AUTH = 'Authorization';
+    public const PAYMENT_ACTION_AUTH = 'Authorization';
 
-    const PAYMENT_ACTION_ORDER = 'Order';
+    public const PAYMENT_ACTION_ORDER = 'Order';
     /**#@-*/
     /**
      * Core store config
@@ -124,9 +125,9 @@ abstract class AbstractConfig implements ConfigInterface
      * Returns payment configuration value
      *
      * @param string $key
-     * @param null $storeId
+     * @param int $storeId
      *
-     * @return null|string
+     * @return string
      *
      * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
@@ -175,7 +176,7 @@ abstract class AbstractConfig implements ConfigInterface
     /**
      * Check whether method available for checkout or not
      *
-     * @param null $methodCode
+     * @param bool $methodCode
      *
      * @return bool
      */

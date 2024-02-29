@@ -1,6 +1,6 @@
 <!--
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -12,18 +12,51 @@
         <input class="radio"
                data-bind="attr: {'id': getCode()}, value: getCode(), checked: isChecked, click: selectPaymentMethod, visible: isRadioButtonVisible()"
                name="payment[method]"
-               type="radio"/>
+               type="radio">
         <label class="label" data-bind="attr: {'for': getCode()}">
-            <!-- PayGate Logo -->
+            <!-- Paygate Logo -->
             <img alt=""
                  class="payment-icon"
                  data-bind="attr: {src: getPaymentAcceptanceMarkSrc(), alt: $t('Acceptance Mark')}"/>
             <!--alt tag replaced by knockout js via databind at loadtime-->
-            <!-- PayGate Logo -->
+            <!-- Paygate Logo -->
             <span data-bind="text: getTitle()"></span>
         </label>
     </div>
     <div class="payment-method-content">
+
+        <!-- ko if: (isPayhostVaultEnabled() != 0)-->
+        <!-- ko if:(checkPayhostSavedCard() <= 0) -->
+        <div name="payment-token" style="margin-bottom:20px;">
+            <input id="payhost-payvault-method"
+                   name="payhost-payvault-method"
+                   type="checkbox"
+                   value="true">
+            <label class="label" data-bind="attr: {'for': getCode() + '_enable_vault'}">
+                <span><!-- ko i18n: 'Remember my credit card number'--><!-- /ko --></span>
+            </label>
+        </div>
+        <!-- /ko -->
+
+        <!-- ko if:(checkPayhostSavedCard() > 0) -->
+        <div class="saved_cards">
+            <select id="payhost_saved_cards" name="payhost_saved_cards">
+                <!-- ko foreach: { data: JSON.parse(getPayhostSavedCardList()), as: 'card' } -->
+                <option data-bind="attr: {'value': card.token}">
+                    <!-- ko i18n: "Use " --><!-- /ko -->
+                    <!-- ko i18n: card.card_type --><!-- /ko -->
+                    <!-- ko i18n: " ending in " --><!-- /ko -->
+                    <!-- ko i18n: card.masked_cc --><!-- /ko -->
+                </option>
+                <!-- /ko -->
+                <option data-bind="attr: {'value': 'new-save'}"><!-- ko i18n: "Use a new Card" --><!-- /ko --></option>
+                <option data-bind="attr: {'value': 'new'}"><!-- ko i18n: "Use a new Card & don't save" -->
+                    <!-- /ko --></option>
+            </select>
+        </div>
+        <!-- /ko -->
+        <!-- /ko -->
+
         <div class="payment-method-billing-address">
             <!-- ko foreach: $parent.getRegion(getBillingAddressFormName()) -->
             <!-- ko template: getTemplate() --><!-- /ko -->

@@ -1,13 +1,12 @@
 <?php
+
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
  * Released under the GNU General Public License
  */
-
-// @codingStandardsIgnoreFile
 
 namespace PayGate\PayHost\Model;
 
@@ -22,7 +21,7 @@ use Psr\Log\LoggerInterface;
 
 /**
  * Config model that is aware of all \PayGate\PayHost payment methods
- * Works with PayGate-specific system configuration
+ * Works with Paygate-specific system configuration
  * @SuppressWarnings(PHPMD.ExcesivePublicCount)
  * @SuppressWarnings(PHPMD.ExcessiveClassComplexity)
  */
@@ -48,7 +47,7 @@ class Config extends AbstractConfig
     protected $_supportedBuyerCountryCodes = ['ZA'];
 
     /**
-     * Currency codes supported by PayGate methods
+     * Currency codes supported by Paygate methods
      * @var string[]
      */
     protected $_supportedCurrencyCodes = ['USD', 'EUR', 'GPD', 'ZAR'];
@@ -115,7 +114,7 @@ class Config extends AbstractConfig
     }
 
     /**
-     * Return buyer country codes supported by PayGate
+     * Return buyer country codes supported by Paygate
      *
      * @return string[]
      */
@@ -180,28 +179,28 @@ class Config extends AbstractConfig
     }
 
     /**
-     * Get PayGate "mark" image URL
+     * Get Paygate "mark" image URL
      *
      * @return string
      */
     public function getPaymentMarkImageUrl()
     {
-        return $this->_assetRepo->getUrl('PayGate_PayHost::images/logo.png');
+        return $this->_assetRepo->getUrl('PayGate_PayHost::images/paygate.svg');
     }
 
     /**
-     * Get "What Is PayGate" localized URL
+     * Get "What Is Paygate" localized URL
      * Supposed to be used with "mark" as popup window
      *
      * @return string
      */
     public function getPaymentMarkWhatIsPaygate()
     {
-        return 'PayGate Payment Gateway';
+        return 'Paygate Payment Gateway';
     }
 
     /**
-     * Mapper from PayGate-specific payment actions to Magento payment actions
+     * Mapper from Paygate-specific payment actions to Magento payment actions
      *
      * @return string|null
      */
@@ -268,11 +267,11 @@ class Config extends AbstractConfig
      **/
     public function isVault()
     {
-        return $this->getConfig('paygate_cc_vault_active');
+        return (int)$this->getConfig('payhost_cc_vault_active') === 1;
     }
 
     /**
-     * Get Api Credential for PayGate Payment
+     * Get Api Credential for Paygate Payment
      **/
 
     public function getApiCredentials()
@@ -285,6 +284,35 @@ class Config extends AbstractConfig
     }
 
     /**
+     * Get Encryption key from configuration
+     **/
+    public function getEncryptionKey($store_id = null): string
+    {
+        $encryptionKey = $this->getConfig('encryption_key');
+        if ($store_id) {
+            $encryptionKey = $this->getConfig('encryption_key', $store_id);
+        }
+
+        if ($this->isTestMode()) {
+            $encryptionKey = 'secret';
+        }
+
+        return $encryptionKey;
+    }
+
+    /**
+     * Check is test mode or live
+     **/
+    public function isTestMode(): bool
+    {
+        if ($this->getConfig('test_mode') == '1') {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Check whether specified locale code is supported. Fallback to en_US
      *
      * @param string|null $localeCode
@@ -293,7 +321,7 @@ class Config extends AbstractConfig
      */
     protected function _getSupportedLocaleCode($localeCode = null)
     {
-        if ( ! $localeCode || ! in_array($localeCode, $this->_supportedImageLocales)) {
+        if (!$localeCode || !in_array($localeCode, $this->_supportedImageLocales)) {
             return 'en_US';
         }
 
@@ -302,7 +330,7 @@ class Config extends AbstractConfig
 
     /**
      * _mapPayGateFieldset
-     * Map PayGate config fields
+     * Map Paygate config fields
      *
      * @param string $fieldName
      *

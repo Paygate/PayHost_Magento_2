@@ -1,6 +1,7 @@
 <?php
+
 /*
- * Copyright (c) 2021 PayGate (Pty) Ltd
+ * Copyright (c) 2024 Payfast (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -12,7 +13,6 @@ namespace PayGate\PayHost\Block\Customer;
 use Magento\Framework\View\Element\Template;
 use Magento\Vault\Api\Data\PaymentTokenInterface;
 use Magento\Vault\Block\AbstractCardRenderer;
-
 
 class CardRenderer extends AbstractCardRenderer
 {
@@ -30,6 +30,8 @@ class CardRenderer extends AbstractCardRenderer
     }
 
     /**
+     * Get the last 4 digit number
+     *
      * @return string
      * @since 100.1.0
      */
@@ -39,6 +41,8 @@ class CardRenderer extends AbstractCardRenderer
     }
 
     /**
+     * Get the expiration date
+     *
      * @return string
      * @since 100.1.0
      */
@@ -48,6 +52,8 @@ class CardRenderer extends AbstractCardRenderer
     }
 
     /**
+     * Get the icon url
+     *
      * @return string
      * @since 100.1.0
      */
@@ -57,6 +63,8 @@ class CardRenderer extends AbstractCardRenderer
     }
 
     /**
+     * Get icon height
+     *
      * @return int
      * @since 100.1.0
      */
@@ -66,6 +74,8 @@ class CardRenderer extends AbstractCardRenderer
     }
 
     /**
+     * Get icon width
+     *
      * @return int
      * @since 100.1.0
      */
