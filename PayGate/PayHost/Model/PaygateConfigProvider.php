@@ -18,7 +18,7 @@ use Magento\Framework\Locale\ResolverInterface;
 use Magento\Framework\UrlInterface;
 use Magento\Framework\View\Asset\Repository;
 use Magento\Payment\Helper\Data as PaymentHelper;
-use Magento\Payment\Model\Method\AbstractMethod;
+use Magento\Payment\Model\MethodInterface;
 use Magento\Vault\Api\PaymentTokenManagementInterface;
 use PayGate\PayHost\Helper\Data as PaygateHelper;
 use Psr\Log\LoggerInterface;
@@ -58,7 +58,7 @@ class PaygateConfigProvider implements ConfigProviderInterface
     ];
 
     /**
-     * @var AbstractMethod[]
+     * @var MethodInterface[]
      */
     protected $methods = [];
 

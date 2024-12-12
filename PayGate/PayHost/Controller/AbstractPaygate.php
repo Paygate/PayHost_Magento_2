@@ -10,12 +10,9 @@
 
 namespace PayGate\PayHost\Controller;
 
-use Magento\Checkout\Controller\Express\RedirectLoginInterface;
 use Magento\Checkout\Model\Session as CheckoutSession;
 use Magento\Customer\Model\Session as CustomerSession;
 use Magento\Customer\Model\Url;
-use Magento\Framework\App\Action\Action as AppAction;
-use Magento\Framework\App\Action\Context;
 use Magento\Framework\App\Action\HttpGetActionInterface;
 use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\App\CsrfAwareActionInterface;
@@ -39,6 +36,7 @@ use Magento\Quote\Api\CartRepositoryInterface;
 use Magento\Quote\Model\Quote;
 use Magento\Sales\Api\Data\TransactionSearchResultInterfaceFactory;
 use Magento\Sales\Api\OrderRepositoryInterface;
+use Magento\Sales\Api\OrderStatusHistoryRepositoryInterface;
 use Magento\Sales\Model\Order;
 use Magento\Sales\Model\Order\Email\Sender\InvoiceSender;
 use Magento\Sales\Model\Order\Email\Sender\OrderSender;
@@ -67,53 +65,48 @@ abstract class AbstractPaygate implements
      *
      * @var array
      */
-    protected $_checkoutTypes = [];
-
-    /**
-     * @var Config
-     */
-    protected $_config;
+    protected $checkoutTypes = [];
 
     /**
      * @var Quote
      */
-    protected $_quote = false;
+    protected $quote = false;
 
     /**
      * Config mode type
      *
      * @var string
      */
-    protected $_configType = Config::class;
+    protected $configType = Config::class;
 
     /**
      * Config method type
      *
      * @var string
      */
-    protected $_configMethod = Config::METHOD_CODE;
+    protected $configMethod = Config::METHOD_CODE;
 
     /**
      * Checkout mode type
      *
      * @var string
      */
-    protected $_checkoutType;
+    protected $checkoutType;
 
     /**
      * @var CustomerSession
      */
-    protected $_customerSession;
+    protected CustomerSession $customerSession;
 
     /**
-     * @var CheckoutSession $_checkoutSession
+     * @var CheckoutSession
      */
-    protected $_checkoutSession;
+    protected CheckoutSession $checkoutSession;
 
     /**
      * @var OrderFactory
      */
-    protected $_orderFactory;
+    protected $orderFactory;
 
     /**
      * @var Generic
@@ -123,57 +116,52 @@ abstract class AbstractPaygate implements
     /**
      * @var Helper
      */
-    protected $_urlHelper;
+    protected $urlHelper;
 
     /**
      * @var Url
      */
-    protected $_customerUrl;
+    protected $customerUrl;
 
     /**
      * @var LoggerInterface
      */
-    protected $_logger;
-
-    /**
-     * @var  Order $_order
-     */
-    protected $_order;
+    protected LoggerInterface $logger;
 
     /**
      * @var PageFactory
      */
-    protected $pageFactory;
+    protected PageFactory $pageFactory;
 
     /**
      * @var TransactionFactory
      */
-    protected $_transactionFactory;
+    protected $transactionFactory;
 
     /**
      * @var  StoreManagerInterface $storeManager
      */
-    protected $_storeManager;
+    protected $storeManager;
 
     /**
-     * @var PayGate $_paymentMethod
+     * @var PayGate $paymentMethod
      */
-    protected $_paymentMethod;
+    protected PayGate $paymentMethod;
 
     /**
-     * @var OrderRepositoryInterface $orderRepository
+     * @var OrderRepositoryInterface
      */
-    protected $orderRepository;
+    protected OrderRepositoryInterface $orderRepository;
 
     /**
-     * @var CollectionFactory $_orderCollectionFactory
+     * @var CollectionFactory $orderCollectionFactory
      */
-    protected $_orderCollectionFactory;
+    protected $orderCollectionFactory;
 
     /**
-     * @var Magento\Sales\Model\Order\Payment\Transaction\Builder $_transactionBuilder
+     * @var Builder
      */
-    protected $_transactionBuilder;
+    protected Builder $transactionBuilder;
     /**
      * @var DBTransaction
      */
@@ -181,7 +169,7 @@ abstract class AbstractPaygate implements
     /**
      * @var Order
      */
-    protected $order;
+    protected Order $order;
     /**
      * @var Config
      */
@@ -193,7 +181,7 @@ abstract class AbstractPaygate implements
     /**
      * @var InvoiceService
      */
-    protected $_invoiceService;
+    protected $invoiceService;
     /**
      * @var InvoiceSender
      */
@@ -201,9 +189,11 @@ abstract class AbstractPaygate implements
     /**
      * @var OrderSender
      */
-    protected $OrderSender;
-    /** @var State * */
-    protected $state;
+    protected OrderSender $orderSender;
+    /**
+     * @var State
+     */
+    protected State $state;
     /**
      * @var \Magento\Quote\Api\CartRepositoryInterface
      */
@@ -213,7 +203,7 @@ abstract class AbstractPaygate implements
      */
     protected JsonFactory $jsonFactory;
     /**
-     * @var ResultFactory $resultFactory
+     * @var ResultFactory
      */
     protected ResultFactory $resultFactory;
     /**
@@ -227,38 +217,44 @@ abstract class AbstractPaygate implements
     /**
      * @var UrlInterface
      */
-    private $_urlBuilder;
+    private $urlBuilder;
     /**
      * @var DateTime
      */
-    private $_date;
-    /** @var State * */
-    private $_paygatehelper;
+    private $date;
+    /**
+     * @var State
+     */
+    private $paygatehelper;
     /**
      * @var \Magento\Vault\Api\PaymentTokenManagementInterface
      */
     private PaymentTokenManagementInterface $tokenManagement;
+    /**
+     * @var OrderStatusHistoryRepositoryInterface
+     */
+    protected OrderStatusHistoryRepositoryInterface $orderStatusHistoryRepository;
 
     /**
-     * @param PageFactory $pageFactory ,
-     * @param CustomerSession $customerSession ,
-     * @param CheckoutSession $checkoutSession ,
-     * @param OrderFactory $orderFactory ,
-     * @param Generic $paygateSession ,
-     * @param Data $urlHelper ,
-     * @param Url $customerUrl ,
-     * @param LoggerInterface $logger ,
-     * @param TransactionFactory $transactionFactory ,
-     * @param InvoiceService $invoiceService ,
-     * @param InvoiceSender $invoiceSender ,
-     * @param PayGate $paymentMethod ,
-     * @param UrlInterface $urlBuilder ,
-     * @param OrderRepositoryInterface $orderRepository ,
-     * @param StoreManagerInterface $storeManager ,
-     * @param OrderSender $OrderSender ,
-     * @param DateTime $date ,
-     * @param CollectionFactory $orderCollectionFactory ,
-     * @param Builder $_transactionBuilder
+     * @param PageFactory $pageFactory
+     * @param CustomerSession $customerSession
+     * @param CheckoutSession $checkoutSession
+     * @param OrderFactory $orderFactory
+     * @param Generic $paygateSession
+     * @param Data $urlHelper
+     * @param Url $customerUrl
+     * @param LoggerInterface $logger
+     * @param TransactionFactory $transactionFactory
+     * @param InvoiceService $invoiceService
+     * @param InvoiceSender $invoiceSender
+     * @param PayGate $paymentMethod
+     * @param UrlInterface $urlBuilder
+     * @param OrderRepositoryInterface $orderRepository
+     * @param StoreManagerInterface $storeManager
+     * @param OrderSenderOrderSender $orderSenderOrderSender
+     * @param DateTime $date
+     * @param CollectionFactory $orderCollectionFactory
+     * @param Builder $transactionBuilder
      * @param DBTransaction $dbTransaction
      * @param Order $order
      * @param Config $config
@@ -271,6 +267,7 @@ abstract class AbstractPaygate implements
      * @param ResultFactory $resultFactory
      * @param Request $request
      * @param ManagerInterface $messageManager
+     * @param OrderStatusHistoryRepositoryInterface $orderStatusHistoryRepository
      */
     public function __construct(
         PageFactory $pageFactory,
@@ -288,10 +285,10 @@ abstract class AbstractPaygate implements
         UrlInterface $urlBuilder,
         OrderRepositoryInterface $orderRepository,
         StoreManagerInterface $storeManager,
-        OrderSender $OrderSender,
+        OrderSender $orderSender,
         DateTime $date,
         CollectionFactory $orderCollectionFactory,
-        Builder $_transactionBuilder,
+        Builder $transactionBuilder,
         DBTransaction $dbTransaction,
         Order $order,
         Config $config,
@@ -303,46 +300,48 @@ abstract class AbstractPaygate implements
         JsonFactory $jsonFactory,
         ResultFactory $resultFactory,
         Request $request,
-        ManagerInterface $messageManager
+        ManagerInterface $messageManager,
+        OrderStatusHistoryRepositoryInterface $orderStatusHistoryRepository
     ) {
         $pre = __METHOD__ . " : ";
 
-        $this->_logger = $logger;
+        $this->logger = $logger;
 
-        $this->_logger->debug($pre . 'bof');
+        $this->logger->debug($pre . 'bof');
 
         $this->dbTransaction                           = $dbTransaction;
         $this->order                                   = $order;
         $this->config                                  = $config;
         $this->transactionSearchResultInterfaceFactory = $transactionSearchResultInterfaceFactory;
-        $this->_customerSession                        = $customerSession;
-        $this->_checkoutSession                        = $checkoutSession;
-        $this->_orderFactory                           = $orderFactory;
+        $this->customerSession                         = $customerSession;
+        $this->checkoutSession                         = $checkoutSession;
+        $this->orderFactory                            = $orderFactory;
         $this->paygateSession                          = $paygateSession;
-        $this->_urlHelper                              = $urlHelper;
-        $this->_customerUrl                            = $customerUrl;
+        $this->urlHelper                               = $urlHelper;
+        $this->customerUrl                             = $customerUrl;
         $this->pageFactory                             = $pageFactory;
-        $this->_invoiceService                         = $invoiceService;
+        $this->invoiceService                          = $invoiceService;
         $this->invoiceSender                           = $invoiceSender;
-        $this->OrderSender                             = $OrderSender;
-        $this->_transactionFactory                     = $transactionFactory;
-        $this->_paymentMethod                          = $paymentMethod;
-        $this->_urlBuilder                             = $urlBuilder;
+        $this->orderSender                             = $orderSender;
+        $this->transactionFactory                      = $transactionFactory;
+        $this->paymentMethod                           = $paymentMethod;
+        $this->urlBuilder                              = $urlBuilder;
         $this->orderRepository                         = $orderRepository;
-        $this->_storeManager                           = $storeManager;
-        $this->_date                                   = $date;
-        $this->_orderCollectionFactory                 = $orderCollectionFactory;
-        $this->_transactionBuilder                     = $_transactionBuilder;
+        $this->storeManager                            = $storeManager;
+        $this->date                                    = $date;
+        $this->orderCollectionFactory                  = $orderCollectionFactory;
+        $this->transactionBuilder                      = $transactionBuilder;
         $this->quoteRepository                         = $quoteRepository;
         $this->tokenManagement                         = $tokenManagement;
         $this->resultFactory                           = $resultFactory;
         $this->request                                 = $request;
         $this->messageManager                          = $messageManager;
         $this->state                                   = $state;
-        $this->_paygatehelper                          = $paygatehelper;
+        $this->paygatehelper                           = $paygatehelper;
         $this->jsonFactory                             = $jsonFactory;
+        $this->orderStatusHistoryRepository            = $orderStatusHistoryRepository;
 
-        $this->_logger->debug($pre . 'eof');
+        $this->logger->debug($pre . 'eof');
     }
 
     /**
@@ -355,7 +354,7 @@ abstract class AbstractPaygate implements
      */
     public function getConfigData($field)
     {
-        return $this->_paymentMethod->getConfigData($field);
+        return $this->paymentMethod->getConfigData($field);
     }
 
     /**
@@ -385,7 +384,7 @@ abstract class AbstractPaygate implements
      */
     public function getLoginUrl()
     {
-        return $this->_customerUrl->getLoginUrl();
+        return $this->customerUrl->getLoginUrl();
     }
 
     /**
@@ -405,10 +404,10 @@ abstract class AbstractPaygate implements
      */
     public function redirectLogin()
     {
-        $this->_actionFlag->set('', 'no-dispatch', true);
-        $this->_customerSession->setBeforeAuthUrl($this->_redirect->getRefererUrl());
+        $this->actionFlag->set('', 'no-dispatch', true);
+        $this->customerSession->setBeforeAuthUrl($this->redirect->getRefererUrl());
         $this->getResponse()->setRedirect(
-            $this->_urlHelper->addRequestParam($this->_customerUrl->getLoginUrl(), ['context' => 'checkout'])
+            $this->urlHelper->addRequestParam($this->customerUrl->getLoginUrl(), ['context' => 'checkout'])
         );
     }
 
@@ -438,28 +437,32 @@ abstract class AbstractPaygate implements
     protected function _initCheckout()
     {
         $pre = __METHOD__ . " : ";
-        $this->_logger->debug($pre . 'bof');
-        $this->_order = $this->_checkoutSession->getLastRealOrder();
+        $this->logger->debug($pre . 'bof');
+        $this->order = $this->checkoutSession->getLastRealOrder();
 
-        if (!$this->_order->getId()) {
+        if (!$this->order->getId()) {
             $this->getResponse()->setStatusHeader(404, '1.1', 'Not found');
             throw new LocalizedException(__('We could not find "Order" for processing'));
         }
 
-        if ($this->_order->getState() != Order::STATE_PENDING_PAYMENT) {
-            $this->_order->setState(
-                Order::STATE_PENDING_PAYMENT
-            )->save();
+        if ($this->order->getState() != Order::STATE_PENDING_PAYMENT) {
+            $this->order->setState(Order::STATE_PENDING_PAYMENT);
+            $this->orderRepository->save($this->order);
         }
 
-        if ($this->_order->getQuoteId()) {
-            $this->_checkoutSession->setPaygateQuoteId($this->_checkoutSession->getQuoteId());
-            $this->_checkoutSession->setPaygateSuccessQuoteId($this->_checkoutSession->getLastSuccessQuoteId());
-            $this->_checkoutSession->setPaygateRealOrderId($this->_checkoutSession->getLastRealOrderId());
-            $this->_checkoutSession->getQuote()->setIsActive(false)->save();
+        if ($this->order->getQuoteId()) {
+            $this->checkoutSession->setPaygateQuoteId($this->checkoutSession->getQuoteId());
+            $this->checkoutSession->setPaygateSuccessQuoteId($this->checkoutSession->getLastSuccessQuoteId());
+            $this->checkoutSession->setPaygateRealOrderId($this->checkoutSession->getLastRealOrderId());
+            // Deactivate the quote and save using the repository
+            $quote = $this->checkoutSession->getQuote();
+            $quote->setIsActive(false);
+
+            // Save the quote using the repository
+            $this->quoteRepository->save($quote);
         }
 
-        $this->_logger->debug($pre . 'eof');
+        $this->logger->debug($pre . 'eof');
     }
 
     /**
@@ -479,7 +482,7 @@ abstract class AbstractPaygate implements
      */
     protected function _getCheckoutSession()
     {
-        return $this->_checkoutSession;
+        return $this->checkoutSession;
     }
 
     /**
@@ -489,10 +492,10 @@ abstract class AbstractPaygate implements
      */
     protected function _getQuote()
     {
-        if (!$this->_quote) {
-            $this->_quote = $this->_getCheckoutSession()->getQuote();
+        if (!$this->quote) {
+            $this->quote = $this->_getCheckoutSession()->getQuote();
         }
 
-        return $this->_quote;
+        return $this->quote;
     }
 }

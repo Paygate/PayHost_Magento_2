@@ -67,10 +67,9 @@ class Request extends Template
         $this->_orderFactory    = $orderFactory;
         $this->_checkoutSession = $checkoutSession;
         parent::__construct($context, $data);
-        $this->_isScopePrivate = true;
-        $this->readFactory     = $readFactory;
-        $this->reader          = $reader;
-        $this->_paymentMethod  = $paymentMethod;
+        $this->readFactory    = $readFactory;
+        $this->reader         = $reader;
+        $this->_paymentMethod = $paymentMethod;
     }
 
     /**
@@ -91,5 +90,13 @@ class Request extends Template
              );
 
         return parent::_prepareLayout();
+    }
+
+    /**
+     * @return int|null
+     */
+    public function getCacheLifetime(): ?int
+    {
+        return null; // Disables block caching
     }
 }

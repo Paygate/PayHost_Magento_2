@@ -22,6 +22,7 @@ use Magento\Sales\Model\Order\Invoice;
 use Magento\Sales\Model\Order\Payment\Transaction;
 use Magento\Vault\Api\PaymentTokenManagementInterface;
 use PayGate\PayHost\Controller\AbstractPaygate;
+use PayGate\PayHost\Model\Config;
 
 /**
  * Responsible for loading page content.
@@ -57,7 +58,7 @@ class Success extends AbstractPaygate
     /**
      * @var CustomerSession
      */
-    private CustomerSession $customerSession;
+    protected CustomerSession $customerSession;
 
     /**
      * Browser redirect returns here with POST
@@ -68,24 +69,37 @@ class Success extends AbstractPaygate
      */
     public function execute()
     {
-        $baseurl                           = $this->_storeManager->getStore()->getBaseUrl();
+        $baseurl                           = $this->storeManager->getStore()->getBaseUrl();
         $this->redirectToSuccessPageString = 'checkout/onepage/success';
         $this->redirectToCartPageString    = 'checkout/cart';
         $pre                               = __METHOD__ . " : ";
         $data                              = $this->request->getPostValue();
         $reference                         = $this->request->getParam('gid');
 
-        $this->_order = $this->_checkoutSession->getLastRealOrder();
-        $order        = $this->getOrder();
+        $this->order = $this->checkoutSession->getLastRealOrder();
+        $order       = $this->getOrder();
 
         $resultRedirectFactory = $this->resultFactory->create(ResultFactory::TYPE_REDIRECT);
+
+        $debugCron           = $this->getConfigData('debug_cron');
+        $canProcessThisOrder = $this->paymentMethod->getConfigData('ipn_method') != '0';
+
+        if ($debugCron) {
+            $this->messageManager->addNoticeMessage(
+                __(
+                    'This is a cron debugging test, the order is still in pending.'
+                )
+            );
+
+            return $resultRedirectFactory->setPath('checkout/onepage/success');
+        }
 
         try {
             $this->secret      = $this->getConfigData('encryption_key');
             $this->id          = $this->getConfigData('paygate_id');
             $this->vaultActive = (int)$this->getConfigData('payhost_cc_vault_active') === 1;
 
-            $this->_logger->debug($pre . 'bof');
+            $this->logger->debug($pre . 'bof');
             $chkSum            = array_pop($data);
             $data['REFERENCE'] = $reference;
             $data['CHECKSUM']  = $chkSum;
@@ -97,14 +111,14 @@ class Success extends AbstractPaygate
                 $customerData = $objectManager->create(Customer::class)
                                               ->load($customerId);
 
-                $this->_customerSession->setCustomerAsLoggedIn($customerData);
+                $this->customerSession->setCustomerAsLoggedIn($customerData);
             }
 
             if (!$this->verifyChecksum($data)) {
                 throw new LocalizedException(__('Checksum mismatch: ' . json_encode($data)));
             }
 
-            $this->_logger->debug('Success: ' . json_encode($data));
+            $this->logger->debug('Success: ' . json_encode($data));
 
             $this->pageFactory->create();
 
@@ -113,6 +127,7 @@ class Success extends AbstractPaygate
             $notifyResponse = $this->notify($data);
 
             $order = $this->orderRepository->get($order->getId());
+
             if (isset($data['TRANSACTION_STATUS'])) {
                 if ($notifyResponse['ns2TransactionStatusCode'] == 1
                     || $notifyResponse['ns2TransactionStatusDescription'] == "Approved") {
@@ -123,109 +138,174 @@ class Success extends AbstractPaygate
 
                 switch ($status) {
                     case 1:
-                        $status = \Magento\Sales\Model\Order::STATE_PROCESSING;
-                        if ($this->getConfigData('Successful_Order_status') != "") {
-                            $status = $this->getConfigData('Successful_Order_status');
-                        }
-
-                        $model                  = $this->_paymentMethod;
-                        $order_successful_email = $model->getConfigData('order_email');
-
-                        if ($order_successful_email != '0') {
-                            $this->OrderSender->send($order);
-                            $order->addStatusHistoryComment(
-                                __('Notified customer about order #%1.', $order->getId())
-                            )->setIsCustomerNotified(true)->save();
-                        }
-
-                        $invoices = $order->getInvoiceCollection()->count();
-                        $due      = $order->getTotalDue();
-
-                        $alreadyPaid = false;
-                        if ($invoices > 0 && $due == 0.0) {
-                            $alreadyPaid = true;
-                            $this->_logger->info('Payment has already been processed');
-                        }
-                        if (!$alreadyPaid) {
-                            // Capture invoice when payment is successful
-                            $invoice = $this->_invoiceService->prepareInvoice($order);
-                            $invoice->setRequestedCaptureCase(Invoice::CAPTURE_ONLINE);
-                            $invoice->register();
-
-                            // Save the invoice to the order
-                            $transaction = $this->dbTransaction
-                                ->addObject($invoice)
-                                ->addObject($invoice->getOrder());
-
-                            $transaction->save();
-
-                            // Magento\Sales\Model\Order\Email\Sender\InvoiceSender
-                            $send_invoice_email = $model->getConfigData('invoice_email');
-                            if ($send_invoice_email != '0') {
-                                $this->invoiceSender->send($invoice);
-                                $order->addStatusHistoryComment(
-                                    __('Notified customer about invoice #%1.', $invoice->getId())
-                                )->setIsCustomerNotified(true)->save();
+                        if ($canProcessThisOrder) {
+                            $status = \Magento\Sales\Model\Order::STATE_PROCESSING;
+                            if ($this->getConfigData('Successful_Order_status') != "") {
+                                $status = $this->getConfigData('Successful_Order_status');
                             }
 
-                            // Save Transaction Response
-                            $transactionId = $this->createTransaction($data);
+                            $model                  = $this->paymentMethod;
+                            $order_successful_email = $model->getConfigData('order_email');
 
-                            $invoice->setTransactionId($transactionId);
-                            $invoice->save();
+                            $history = $order->addCommentToStatusHistory(
+                                __(
+                                    'Redirect Response, Transaction has been approved, Pay_Request_Id: '
+                                    . $data['PAY_REQUEST_ID']
+                                )
+                            );
 
-                            // Save card vault data
-                            if ($this->vaultActive && !empty($notifyResponse['ns2VaultId'])) {
-                                $model = $this->_paymentMethod;
-                                $model->saveVaultData($order, $notifyResponse);
+                            if ($order_successful_email != '0') {
+                                $this->orderSender->send($order);
+                                $history->setIsCustomerNotified(true);
+                            } else {
+                                $history->setIsCustomerNotified(false);
+                            }
+                            try {
+                                // Save the status history
+                                $this->orderStatusHistoryRepository->save($history);
+
+                                // Save the order
+                                $this->orderRepository->save($order);
+                            } catch (LocalizedException $e) {
+                                // Handle any exceptions during the save process
+                                $this->logger->error('Order save error: ' . $e->getMessage());
                             }
 
-                            $order->setState($status)->setStatus($status)->save();
+                            $invoices = $order->getInvoiceCollection()->count();
+                            $due      = $order->getTotalDue();
+
+                            $alreadyPaid = false;
+                            if ($invoices > 0 && $due == 0.0) {
+                                $alreadyPaid = true;
+                                $this->logger->info('Payment has already been processed');
+                            }
+                            if (!$alreadyPaid) {
+                                // Capture invoice when payment is successful
+                                $invoice = $this->invoiceService->prepareInvoice($order);
+                                $invoice->setRequestedCaptureCase(Invoice::CAPTURE_ONLINE);
+                                $invoice->register();
+
+                                // Save the invoice to the order
+                                $transaction = $this->dbTransaction
+                                    ->addObject($invoice)
+                                    ->addObject($invoice->getOrder());
+
+                                $transaction->save();
+
+                                // Save Transaction Response
+                                $this->createTransaction($data);
+
+                                // Save card vault data
+                                if ($this->vaultActive && !empty($notifyResponse['ns2VaultId'])) {
+                                    $model = $this->paymentMethod;
+                                    $model->saveVaultData($order, $notifyResponse);
+                                }
+
+                                $order->setStatus($status);
+                                $order->setState($status);
+                                // Magento\Sales\Model\Order\Email\Sender\InvoiceSender
+                                $send_invoice_email = $model->getConfigData('invoice_email');
+                                $history            = $order->addCommentToStatusHistory(
+                                    __(
+                                        'Redirect Response, update order.'
+                                    )
+                                );
+                                if ($send_invoice_email != '0') {
+                                    $this->invoiceSender->send($invoice);
+                                    $history->setIsCustomerNotified(true);
+                                } else {
+                                    $history->setIsCustomerNotified(false);
+                                }
+                                $this->orderStatusHistoryRepository->save($history);
+                                $this->orderRepository->save($order);
+                            }
                         }
                         // Invoice capture code completed
                         $resultRedirect = $resultRedirectFactory->setPath($this->redirectToSuccessPageString);
                         break;
                     case 2:
-                        $this->messageManager->addNotice('Transaction has been declined.');
-                        $this->_order->addStatusHistoryComment(
-                            __(
-                                'Redirect Response, Transaction has been declined, Pay_Request_Id: '
-                                . $data['PAY_REQUEST_ID']
-                            )
-                        )->setIsCustomerNotified(false);
-                        if ($order->getStatus() != 'canceled') {
-                            $this->_order->cancel()->save();
-                            $this->_checkoutSession->restoreQuote();
-                            // Save Transaction Response
-                            $this->createTransaction($data);
+                        $this->messageManager->addNoticeMessage('Transaction has been declined.');
+
+                        if ($canProcessThisOrder) {
+                            $history = $order->addCommentToStatusHistory(
+                                __(
+                                    'Redirect Response, Transaction has been declined, Pay_Request_Id: '
+                                    . $data['PAY_REQUEST_ID']
+                                )
+                            );
+                            $history->setIsCustomerNotified(false);
+
+                            try {
+                                // Save the status history
+                                $this->orderStatusHistoryRepository->save($history);
+
+                                // Save the order
+                                $this->orderRepository->save($order);
+                            } catch (LocalizedException $e) {
+                                // Handle any exceptions during the save process
+                                $this->logger->error('Order save error: ' . $e->getMessage());
+                            }
+
+                            if ($order->getStatus() != 'canceled') {
+                                $this->order->cancel();
+                                $this->orderRepository->save($this->order);
+                                $this->checkoutSession->restoreQuote();
+                                // Save Transaction Response
+                                $this->createTransaction($data);
+                            }
+                        } else {
+                            $this->checkoutSession->restoreQuote();
                         }
+
                         $resultRedirect = $resultRedirectFactory->setPath($this->redirectToCartPageString);
                         break;
                     case 0:
                     case 4:
-                        $this->messageManager->addNotice('Transaction has been cancelled');
-                        $this->_order->addStatusHistoryComment(
-                            __(
-                                'Redirect Response, Transaction has been cancelled, Pay_Request_Id: '
-                                . $data['PAY_REQUEST_ID']
-                            )
-                        )->setIsCustomerNotified(false);
-                        if ($order->getStatus() != 'canceled') {
-                            $this->_order->cancel()->save();
-                            $this->_checkoutSession->restoreQuote();
-                            // Save Transaction Response
-                            $this->createTransaction($data);
+                        $this->messageManager->addNoticeMessage('Transaction has been cancelled');
+
+                        if ($canProcessThisOrder) {
+                            $history = $order->addCommentToStatusHistory(
+                                __(
+                                    'Redirect Response, Transaction has been cancelled, Pay_Request_Id: '
+                                    . $data['PAY_REQUEST_ID']
+                                )
+                            );
+                            $history->setIsCustomerNotified(false);
+
+                            try {
+                                // Save the status history
+                                $this->orderStatusHistoryRepository->save($history);
+
+                                // Save the order
+                                $this->orderRepository->save($order);
+                            } catch (LocalizedException $e) {
+                                // Handle any exceptions during the save process
+                                $this->logger->error('Order save error: ' . $e->getMessage());
+                            }
+
+                            if ($order->getStatus() != 'canceled') {
+                                $this->order->cancel();
+                                $this->orderRepository->save($this->order);
+                                $this->checkoutSession->restoreQuote();
+                                // Save Transaction Response
+                                $this->createTransaction($data);
+                            }
+                        } else {
+                            $this->checkoutSession->restoreQuote();
                         }
+
                         $resultRedirect = $resultRedirectFactory->setPath($this->redirectToCartPageString);
                         break;
                     default:
-                        // Save Transaction Response
-                        $this->createTransaction($data);
+                        if ($canProcessThisOrder) {
+                            // Save Transaction Response
+                            $this->createTransaction($data);
+                        }
                         break;
                 }
             }
         } catch (LocalizedException $exception) {
-            $this->_logger->error($pre . $exception->getMessage());
+            $this->logger->error($pre . $exception->getMessage());
             $this->messageManager->addExceptionMessage(
                 $exception,
                 __(
@@ -237,7 +317,7 @@ class Success extends AbstractPaygate
         } catch (Exception $e) {
             // Save Transaction Response
             $this->createTransaction($data);
-            $this->_logger->error($pre . $e->getMessage());
+            $this->logger->error($pre . $e->getMessage());
             $this->messageManager->addExceptionMessage($e, __('We can\'t start Paygate Checkout.'));
             $resultRedirect = $resultRedirectFactory->setPath($this->redirectToSuccessPageString);
         }
@@ -254,23 +334,21 @@ class Success extends AbstractPaygate
      */
     public function createTransaction(array $paymentData = [])
     {
+        $response = '';
+
         try {
             // Get payment object from order object
-            $payment = $this->_order->getPayment();
+            $payment = $this->order->getPayment();
             $payment->setLastTransId($paymentData['PAY_REQUEST_ID'])
                     ->setTransactionId($paymentData['PAY_REQUEST_ID'])
                     ->setAdditionalInformation(
                         [Transaction::RAW_DETAILS => (array)$paymentData]
                     );
-            $formattedPrice = $this->_order->getBaseCurrency()->formatTxt(
-                $this->_order->getGrandTotal()
-            );
 
-            $message = __('The authorized amount is %1.', $formattedPrice);
             // Get the object of builder class
-            $trans       = $this->_transactionBuilder;
+            $trans       = $this->transactionBuilder;
             $transaction = $trans->setPayment($payment)
-                                 ->setOrder($this->_order)
+                                 ->setOrder($this->order)
                                  ->setTransactionId($paymentData['PAY_REQUEST_ID'])
                                  ->setAdditionalInformation(
                                      [Transaction::RAW_DETAILS => (array)$paymentData]
@@ -279,18 +357,16 @@ class Success extends AbstractPaygate
                 // Build method creates the transaction and returns the object
                                  ->build(Transaction::TYPE_CAPTURE);
 
-            $payment->addTransactionCommentsToOrder(
-                $transaction,
-                $message
-            );
+            $payment->addTransactionCommentsToOrder($transaction, 'Redirect Response, update transaction.');
             $payment->setParentTransactionId(null);
-            $payment->save();
-            $this->_order->save();
+            $this->orderRepository->save($this->order);
 
-            return $transaction->save()->getTransactionId();
+            $response = $transaction->getTransactionId();
         } catch (Exception $e) {
-            $this->_logger->error($e->getMessage());
+            $this->logger->error($e->getMessage());
         }
+
+        return $response;
     }
 
     /**
@@ -312,13 +388,13 @@ class Success extends AbstractPaygate
      */
     public function setlastOrderDetails()
     {
-        $orderId      = $this->request->getParam('gid');
-        $this->_order = $this->getOrderByIncrementId($orderId);
-        $order        = $this->_order;
-        $this->_checkoutSession->setData('last_order_id', $order->getId());
-        $this->_checkoutSession->setData('last_success_quote_id', $order->getQuoteId());
-        $this->_checkoutSession->setData('last_quote_id', $order->getQuoteId());
-        $this->_checkoutSession->setData('last_real_order_id', $orderId);
+        $orderId     = $this->request->getParam('gid');
+        $this->order = $this->getOrderByIncrementId($orderId);
+        $order       = $this->order;
+        $this->checkoutSession->setData('last_order_id', $order->getId());
+        $this->checkoutSession->setData('last_success_quote_id', $order->getQuoteId());
+        $this->checkoutSession->setData('last_quote_id', $order->getQuoteId());
+        $this->checkoutSession->setData('last_real_order_id', $orderId);
     }
 
     /**
@@ -329,7 +405,7 @@ class Success extends AbstractPaygate
      */
     public function restoreQuote()
     {
-        $session = $this->_checkoutSession;
+        $session = $this->checkoutSession;
         $order   = $session->getLastRealOrder();
         $quoteId = $order->getQuoteId();
         $quote   = $this->quoteRepository->get($quoteId);
@@ -348,8 +424,8 @@ class Success extends AbstractPaygate
     private function notify($data): mixed
     {
         $queryFields = $this->prepareQueryXml($data);
-        $response    = $this->_paymentMethod->curlPost(self::PAYHOSTURL, $queryFields);
-        $respArray   = $this->_paymentMethod->formatXmlToArray($response);
+        $response    = $this->paymentMethod->guzzlePost(self::PAYHOSTURL, $queryFields);
+        $respArray   = $this->paymentMethod->formatXmlToArray($response);
 
         return $respArray['ns2SingleFollowUpResponse']['ns2QueryResponse']['ns2Status'];
     }
@@ -363,7 +439,7 @@ class Success extends AbstractPaygate
      */
     private function prepareQueryXml($data)
     {
-        $cred           = $this->_paymentMethod->getPayGateCredentials();
+        $cred           = $this->paymentMethod->getPayGateCredentials();
         $paygateId      = $cred['paygateId'];
         $password       = $cred['password'];
         $pay_request_id = $data['PAY_REQUEST_ID'];
@@ -391,12 +467,12 @@ class Success extends AbstractPaygate
      */
     private function getOrder(): \Magento\Sales\Model\Order
     {
-        if (!$this->_order->getId()) {
+        if (!$this->order->getId()) {
             $this->setlastOrderDetails();
 
-            return $this->_order;
+            return $this->order;
         } else {
-            return $this->_order;
+            return $this->order;
         }
     }
 
@@ -408,7 +484,7 @@ class Success extends AbstractPaygate
     private function redirectIfOrderNotFound()
     {
         $jsonResult = $this->jsonFactory->create();
-        if (!$this->_order->getId()) {
+        if (!$this->order->getId()) {
             // Redirect to Cart if Order not found
             $jsonResult->setData(json_encode($this->redirectToSuccessPageString));
 

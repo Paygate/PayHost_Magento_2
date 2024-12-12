@@ -20,6 +20,7 @@ use Magento\Sales\Model\Order\Invoice;
 use Magento\Sales\Model\Order\Payment\Transaction;
 use PayGate\PayHost\Controller\AbstractPaygate;
 use PayGate\PayHost\Helper\Data;
+use PayGate\PayHost\Helper\ArrayHelper;
 
 /**
  * Responsible for loading page content.
@@ -37,9 +38,9 @@ class Index extends AbstractPaygate
         $this->state->emulateAreaCode(
             Area::AREA_FRONTEND,
             function () {
-                $this->_logger->error('Starting Paygate Payhost Cron');
+                $this->logger->error('Starting Paygate Payhost Cron');
                 $this->updateForPendingPayGateOrders();
-                $this->_logger->error('Paygate Payhost Cron Ended');
+                $this->logger->error('Paygate Payhost Cron Ended');
             }
         );
     }
@@ -50,15 +51,15 @@ class Index extends AbstractPaygate
     public function updateForPendingPayGateOrders()
     {
         $cutoffTime = (new DateTime())->sub(new DateInterval('PT10M'))->format('Y-m-d H:i:s');
-        $this->_logger->info('Cutoff: ' . $cutoffTime);
-        $ocf = $this->_orderCollectionFactory->create();
+        $this->logger->info('Cutoff: ' . $cutoffTime);
+        $ocf = $this->orderCollectionFactory->create();
         $ocf->addAttributeToSelect('entity_id');
         $ocf->addAttributeToFilter('status', ['eq' => 'pending_payment']);
         $ocf->addAttributeToFilter('created_at', ['lt' => $cutoffTime]);
         $ocf->addAttributeToFilter('updated_at', ['lt' => $cutoffTime]);
         $orderIds = $ocf->getData();
 
-        $this->_logger->info('Orders for cron: ' . json_encode($orderIds));
+        $this->logger->info('Orders for cron: ' . json_encode($orderIds));
 
         foreach ($orderIds as $orderId) {
             $order_id = $orderId['entity_id'];
@@ -85,6 +86,11 @@ class Index extends AbstractPaygate
                     $result['PAYMENT_TYPE_DETAIL'] = $result['ns2PaymentType']['ns2Detail'];
                 }
                 unset($result['ns2PaymentType']);
+
+                // Flatten the nested arrays
+                $arrayHelper = ObjectManager::getInstance()->get(ArrayHelper::class);
+
+                $result = $arrayHelper->flattenArray((array)$result);
 
                 $result['PAY_REQUEST_ID'] = $transactionId;
                 $result['PAYMENT_TITLE']  = "PAYGATE_PAYHOST";
