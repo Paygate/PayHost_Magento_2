@@ -11,15 +11,21 @@
 namespace PayGate\PayHost\Helper;
 
 use Exception;
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
 use Magento\Directory\Model\CurrencyFactory;
 use Magento\Framework\App\Config\BaseFactory;
 use Magento\Framework\App\Helper\AbstractHelper;
 use Magento\Framework\App\Helper\Context;
 use Magento\Framework\DataObject;
 use Magento\Framework\DB\Transaction as DBTransaction;
+use Magento\Framework\Exception\LocalizedException;
+use Magento\Payment\Api\PaymentMethodListInterface;
 use Magento\Payment\Model\InfoInterface;
-use Magento\Quote\Model\Quote;
+use Magento\Quote\Api\Data\CartInterface;
 use Magento\Sales\Api\Data\TransactionSearchResultInterfaceFactory;
+use Magento\Sales\Api\OrderRepositoryInterface;
+use Magento\Sales\Api\OrderStatusHistoryRepositoryInterface;
 use Magento\Sales\Model\Order;
 use Magento\Sales\Model\Order\Email\Sender\InvoiceSender;
 use Magento\Sales\Model\Order\Email\Sender\OrderSender;
@@ -27,7 +33,6 @@ use Magento\Sales\Model\Order\Invoice;
 use Magento\Sales\Model\Order\Payment\Transaction;
 use Magento\Sales\Model\Order\Payment\Transaction\Builder;
 use Magento\Sales\Model\Service\InvoiceService;
-use Magento\Store\Model\Store;
 use Magento\Store\Model\StoreManagerInterface;
 use PayGate\PayHost\Model\Config as PayGateConfig;
 use Psr\Log\LoggerInterface;
@@ -99,6 +104,18 @@ class Data extends AbstractHelper
      * @var ConfigFactory
      */
     private $_paygateconfig;
+    /**
+     * @var PaymentMethodListInterface
+     */
+    protected PaymentMethodListInterface $paymentMethodList;
+    /**
+     * @var OrderRepositoryInterface
+     */
+    private OrderRepositoryInterface $orderRepository;
+    /**
+     * @var OrderStatusHistoryRepositoryInterface
+     */
+    private OrderStatusHistoryRepositoryInterface $orderStatusHistoryRepository;
 
     /**
      * @param Context $context
@@ -113,7 +130,10 @@ class Data extends AbstractHelper
      * @param DBTransaction $dbTransaction
      * @param InvoiceService $invoiceService
      * @param InvoiceSender $invoiceSender
+     * @param PaymentMethodListInterface $paymentMethodList
      * @param array $methodCodes
+     * @param OrderRepositoryInterface $orderRepository
+     * @param OrderStatusHistoryRepositoryInterface $orderStatusHistoryRepository
      */
     public function __construct(
         Context $context,
@@ -128,7 +148,10 @@ class Data extends AbstractHelper
         DBTransaction $dbTransaction,
         InvoiceService $invoiceService,
         InvoiceSender $invoiceSender,
-        array $methodCodes
+        PaymentMethodListInterface $paymentMethodList,
+        array $methodCodes,
+        OrderRepositoryInterface $orderRepository,
+        OrderStatusHistoryRepositoryInterface $orderStatusHistoryRepository
     ) {
         $this->_logger = $context->getLogger();
 
@@ -153,6 +176,9 @@ class Data extends AbstractHelper
         $this->_invoiceService                         = $invoiceService;
         $this->invoiceSender                           = $invoiceSender;
         $this->dbTransaction                           = $dbTransaction;
+        $this->paymentMethodList                       = $paymentMethodList;
+        $this->orderRepository                         = $orderRepository;
+        $this->orderStatusHistoryRepository            = $orderStatusHistoryRepository;
     }
 
     /**
@@ -172,17 +198,18 @@ class Data extends AbstractHelper
     /**
      * Retrieve available billing agreement methods
      *
-     * @param null|string|bool|int|Store $store
-     * @param Quote|null $quote
+     * @param CartInterface $quote
      *
      * @return MethodInterface[]
      */
-    public function getBillingAgreementMethods($store = null, $quote = null)
+    public function getBillingAgreementMethods(CartInterface $quote)
     {
         $pre = __METHOD__ . " : ";
         $this->_logger->debug($pre . 'bof');
-        $result = [];
-        foreach ($this->_paymentData->getStoreMethods($store, $quote) as $method) {
+        $result           = [];
+        $availableMethods = $this->paymentMethodList->getActiveList($quote->getId());
+
+        foreach ($availableMethods as $method) {
             if ($method instanceof MethodInterface) {
                 $result[] = $method;
             }
@@ -238,6 +265,7 @@ class Data extends AbstractHelper
      */
     public function createTransaction($order = null, $paymentData = [])
     {
+        $response = '';
         try {
             // Get payment object from order object
             $payment = $order->getPayment();
@@ -268,13 +296,14 @@ class Data extends AbstractHelper
                 $message
             );
             $payment->setParentTransactionId(null);
-            $payment->save();
-            $order->save();
+            $this->orderRepository->save($order);
 
-            return $transaction->save()->getTransactionId();
+            $response = $transaction->getTransactionId();
         } catch (Exception $e) {
             $this->_logger->error($e->getMessage());
         }
+
+        return $response;
     }
 
     /**
@@ -319,7 +348,7 @@ class Data extends AbstractHelper
     public function getQueryResult($transaction_id)
     {
         $queryFields = $this->prepareQueryXml($transaction_id);
-        $response    = $this->curlPost(self::PAYHOSTURL, $queryFields);
+        $response    = $this->guzzlePost(self::PAYHOSTURL, $queryFields);
         $respArray   = $this->formatXmlToArray($response);
 
         return $respArray['ns2SingleFollowUpResponse']['ns2QueryResponse']['ns2Status'];
@@ -333,34 +362,35 @@ class Data extends AbstractHelper
      *
      * @return XML
      */
-    public function curlPost($url, $xml)
+    public function guzzlePost($url, $xml)
     {
-        $curl = curl_init();
+        // Initialize Guzzle client
+        $client = new Client();
 
-        curl_setopt_array(
-            $curl,
-            [
-                CURLOPT_URL            => self::PAYHOSTURL,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING       => "",
-                CURLOPT_MAXREDIRS      => 10,
-                CURLOPT_TIMEOUT        => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST  => "POST",
-                CURLOPT_POSTFIELDS     => "$xml",
-                CURLOPT_HTTPHEADER     => [
-                    "Content-Type: text/xml",
-                    "SOAPAction: WebPaymentRequest"
-                ],
-            ]
-        );
+        try {
+            // Send POST request
+            $response = $client->post(
+                $url,
+                [
+                    'body'            => $xml,
+                    'headers'         => [
+                        'Content-Type' => 'text/xml',
+                        'SOAPAction'   => 'WebPaymentRequest',
+                    ],
+                    'timeout'         => 0, // Optionally set timeout as needed
+                    'allow_redirects' => true, // Similar to CURLOPT_FOLLOWLOCATION
+                    'http_errors'     => false // Disable throwing exceptions on HTTP errors
+                ]
+            );
 
-        $response = curl_exec($curl);
+            // Get the response body as a string
+            return $response->getBody()->getContents();
+        } catch (RequestException $e) {
+            // Handle Guzzle request exceptions if needed
+            $this->_logger->error('Guzzle request failed: ' . $e->getMessage());
 
-        curl_close($curl);
-
-        return $response;
+            return null;
+        }
     }
 
     /**
@@ -423,7 +453,9 @@ class Data extends AbstractHelper
                 $order->setState($status);
                 $order->save();
                 try {
-                    $this->generateInvoice($order);
+                    if ($order->getInvoiceCollection()->count() <= 0) {
+                        $this->generateInvoice($order);
+                    }
                 } catch (Exception $ex) {
                     $this->_logger->error($ex->getMessage());
                 }
@@ -440,17 +472,30 @@ class Data extends AbstractHelper
     /**
      * Generate the order invoice
      *
-     * @param DataObject|InfoInterface $order
+     * @param Order $order
      */
-    public function generateInvoice($order)
+    public function generateInvoice(Order $order)
     {
         $order_successful_email = $this->getConfigData('order_email');
 
         if ($order_successful_email != '0') {
             $this->OrderSender->send($order);
-            $order->addStatusHistoryComment(
+            // Add status history comment
+            $history = $order->addCommentToStatusHistory(
                 __('Notified customer about order #%1.', $order->getId())
-            )->setIsCustomerNotified(true)->save();
+            );
+            $history->setIsCustomerNotified(true);
+
+            try {
+                // Save the status history
+                $this->orderStatusHistoryRepository->save($history);
+
+                // Save the order
+                $this->orderRepository->save($order);
+            } catch (LocalizedException $e) {
+                // Handle any exceptions during the save process
+                $this->_logger->error('Order save error: ' . $e->getMessage());
+            }
         }
 
         // Capture invoice when payment is successfull
@@ -469,9 +514,23 @@ class Data extends AbstractHelper
         $send_invoice_email = $this->getConfigData('invoice_email');
         if ($send_invoice_email != '0') {
             $this->invoiceSender->send($invoice);
-            $order->addStatusHistoryComment(
-                __('Notified customer about invoice #%1.', $invoice->getId())
-            )->setIsCustomerNotified(true)->save();
+
+            // Add status history comment
+            $history = $order->addCommentToStatusHistory(
+                __('Notified customer about order #%1.', $invoice->getId())
+            );
+            $history->setIsCustomerNotified(true);
+
+            try {
+                // Save the status history
+                $this->orderStatusHistoryRepository->save($history);
+
+                // Save the order
+                $this->orderRepository->save($order);
+            } catch (LocalizedException $e) {
+                // Handle any exceptions during the save process
+                $this->_logger->error('Order save error: ' . $e->getMessage());
+            }
         }
     }
 }

@@ -11,14 +11,14 @@
 namespace PayGate\PayHost\Model;
 
 use Magento\Framework\App\Config\ScopeConfigInterface;
-use Magento\Payment\Model\Method\ConfigInterface;
+use Magento\Payment\Gateway\Config\Config;
 use Magento\Payment\Model\MethodInterface;
 use Magento\Store\Model\ScopeInterface;
 
 /**
  * Class AbstractConfig
  */
-abstract class AbstractConfig implements ConfigInterface
+abstract class AbstractConfig extends Config
 {
     /**
      * Payment actions
@@ -124,16 +124,16 @@ abstract class AbstractConfig implements ConfigInterface
     /**
      * Returns payment configuration value
      *
-     * @param string $key
-     * @param int $storeId
+     * @param string $field
+     * @param int|null $storeId
      *
-     * @return string
+     * @return string|null
      *
      * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
-    public function getValue($key, $storeId = null)
+    public function getValue($field, $storeId = null): ?string
     {
-        $underscored = strtolower(preg_replace('/(.)([A-Z])/', "$1_$2", $key));
+        $underscored = strtolower(preg_replace('/(.)([A-Z])/', "$1_$2", $field));
         $path        = $this->_getSpecificConfigPath($underscored);
 
         if ($path !== null) {

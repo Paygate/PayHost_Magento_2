@@ -28,12 +28,9 @@ use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Exception\LocalizedExceptionFactory;
 use Magento\Framework\HTTP\Client\Curl;
 use Magento\Framework\Model\AbstractExtensibleModel;
-use Magento\Framework\Model\Context;
 use Magento\Framework\Model\ResourceModel\AbstractResource;
-use Magento\Framework\Registry;
 use Magento\Framework\UrlInterface;
 use Magento\Payment\Model\InfoInterface;
-use Magento\Payment\Model\Method\AbstractMethod;
 use Magento\Payment\Model\Method\Logger;
 use Magento\Payment\Model\MethodInterface;
 use Magento\Payment\Observer\AbstractDataAssignObserver;
@@ -52,12 +49,11 @@ use Magento\Sales\Model\Order\Payment\Transaction\BuilderInterface;
 use Magento\Store\Model\ScopeInterface;
 use Magento\Store\Model\Store;
 use Magento\Store\Model\StoreManagerInterface;
+use Magento\Vault\Api\Data\PaymentTokenFactoryInterface;
 use Magento\Vault\Api\Data\PaymentTokenInterface;
 use Magento\Vault\Api\PaymentTokenManagementInterface;
 use Magento\Vault\Api\PaymentTokenRepositoryInterface;
-use Magento\Vault\Model\CreditCardTokenFactory;
 use Magento\Vault\Model\ResourceModel\PaymentToken as PaymentTokenResourceModel;
-use Magento\Vault\Model\Ui\VaultConfigProvider;
 use PayGate\PayHost\Block\Form;
 use PayGate\PayHost\Block\Payment\Info;
 use PayGate\Payhost\CountryData;
@@ -65,6 +61,10 @@ use PayGate\PayHost\Helper\Data;
 use phpseclib3\Crypt\EC\Formats\Keys\XML;
 use Psr\Log\LoggerInterface;
 use SimpleXMLElement;
+use PayGate\PayHost\Helper\ArrayHelper;
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
+
 
 /**
  * @SuppressWarnings(PHPMD.TooManyFields)
@@ -198,9 +198,9 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
      */
     protected $transactionBuilder;
     /**
-     * @var CreditCardTokenFactory
+     * @var PaymentTokenFactoryInterface
      */
-    protected $creditCardTokenFactory;
+    protected $paymentTokenFactory;
     /**
      * @var PaymentTokenRepositoryInterface
      */
@@ -262,9 +262,12 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
      * @var Curl
      */
     private Curl $curl;
+    /**
+     * @var ArrayHelper
+     */
+    private $arrayHelper;
 
     /**
-     * @param Registry $registry
      * @param ExtensionAttributesFactory $extensionFactory
      * @param AttributeValueFactory $customAttributeFactory
      * @param Data $payhostData
@@ -278,7 +281,7 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
      * @param LocalizedExceptionFactory $exception
      * @param TransactionRepositoryInterface $transactionRepository
      * @param BuilderInterface $transactionBuilder
-     * @param CreditCardTokenFactory $CreditCardTokenFactory
+     * @param PaymentTokenFactoryInterface $paymentTokenFactory
      * @param PaymentTokenRepositoryInterface $PaymentTokenRepositoryInterface
      * @param PaymentTokenManagementInterface $paymentTokenManagement
      * @param EncryptorInterface $encryptor
@@ -291,13 +294,13 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
      * @param LoggerInterface $_logger
      * @param CustomerSession $customerSession
      * @param PaymentTokenManagementInterface $paymentTokenManagementInterface
+     * @param ArrayHelper $arrayHelper
      * @param AbstractResource $resource
      * @param AbstractDb $resourceCollection
      * @param array $data
      * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      */
     public function __construct(
-        Registry $registry,
         ExtensionAttributesFactory $extensionFactory,
         AttributeValueFactory $customAttributeFactory,
         Data $payhostData,
@@ -311,7 +314,7 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
         LocalizedExceptionFactory $exception,
         TransactionRepositoryInterface $transactionRepository,
         BuilderInterface $transactionBuilder,
-        CreditCardTokenFactory $CreditCardTokenFactory,
+        PaymentTokenFactoryInterface $paymentTokenFactory,
         PaymentTokenRepositoryInterface $PaymentTokenRepositoryInterface,
         PaymentTokenManagementInterface $paymentTokenManagement,
         EncryptorInterface $encryptor,
@@ -324,6 +327,7 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
         LoggerInterface $_logger,
         CustomerSession $customerSession,
         PaymentTokenManagementInterface $paymentTokenManagementInterface,
+        ArrayHelper $arrayHelper,
         AbstractResource $resource = null,
         AbstractDb $resourceCollection = null,
         array $data = []
@@ -335,7 +339,7 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
         $this->_exception                = $exception;
         $this->transactionRepository     = $transactionRepository;
         $this->transactionBuilder        = $transactionBuilder;
-        $this->creditCardTokenFactory    = $CreditCardTokenFactory;
+        $this->paymentTokenFactory       = $paymentTokenFactory;
         $this->paymentTokenRepository    = $PaymentTokenRepositoryInterface;
         $this->paymentTokenManagement    = $paymentTokenManagement;
         $this->encryptor                 = $encryptor;
@@ -353,6 +357,7 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
         $this->_logger                         = $_logger;
         $this->customerSession                 = $customerSession;
         $this->paymentTokenManagementInterface = $paymentTokenManagementInterface;
+        $this->arrayHelper                     = $arrayHelper;
     }
 
     /**
@@ -451,7 +456,7 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
         $this->_logger->debug($pre . 'serverMode : ' . $this->getConfigData('test_mode'));
         $payhostFields = $this->prepareFields($order);
 
-        $response = $this->curlPost(self::PAYHOSTURL, $payhostFields);
+        $response = $this->guzzlePost(self::PAYHOSTURL, $payhostFields);
 
         $respArray = $this->formatXmlToArray($response);
         if (($respArray['ns2SinglePaymentResponse']['ns2WebPaymentResponse']['ns2Status']['ns2StatusName'] ?? '')
@@ -598,34 +603,35 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
      *
      * @return XML
      */
-    public function curlPost($url, $xml)
+    public function guzzlePost($url, $xml)
     {
-        // phpcs:ignore Magento2.Security.InsecureFunction
-        $curl = curl_init();
+        // Initialize Guzzle client
+        $client = new Client();
 
-        curl_setopt_array(
-            $curl,
-            [
-                CURLOPT_URL            => self::PAYHOSTURL,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING       => "",
-                CURLOPT_MAXREDIRS      => 10,
-                CURLOPT_TIMEOUT        => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST  => "POST",
-                CURLOPT_POSTFIELDS     => "$xml",
-                CURLOPT_HTTPHEADER     => [
-                    "Content-Type: text/xml",
-                    "SOAPAction: WebPaymentRequest"
-                ],
-            ]
-        );
-        $response = curl_exec($curl);
+        try {
+            // Send POST request
+            $response = $client->post(
+                $url,
+                [
+                    'body'            => $xml,
+                    'headers'         => [
+                        'Content-Type' => 'text/xml',
+                        'SOAPAction'   => 'WebPaymentRequest',
+                    ],
+                    'timeout'         => 0, // Optionally set timeout as needed
+                    'allow_redirects' => true, // Similar to CURLOPT_FOLLOWLOCATION
+                    'http_errors'     => false // Disable throwing exceptions on HTTP errors
+                ]
+            );
 
-        curl_close($curl);
+            // Get the response body as a string
+            return $response->getBody()->getContents();
+        } catch (RequestException $e) {
+            // Handle Guzzle request exceptions if needed
+            $this->_logger->error('Guzzle request failed: ' . $e->getMessage());
 
-        return $response;
+            return null;
+        }
     }
 
     /**
@@ -828,7 +834,7 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
             $status   = $transactionData['ns2StatusName'];
             $order->addStatusHistoryComment(
                 __(
-                    "Order Successfullt Refunded with Transaction Id - 
+                    "Order Successfully Refunded with Transaction Id -
                     $trxId Pay Request Id - $payReqId  & status - $status."
                 )
             )->save();
@@ -914,7 +920,7 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
     {
         $xml = $this->makeUpXml($xml);
 
-        return $this->curlPost(self::PAYHOSTURL, $xml);
+        return $this->guzzlePost(self::PAYHOSTURL, $xml);
     }
 
     /**
@@ -980,14 +986,16 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
         if ($state->getAreaCode() == Area::AREA_ADMINHTML) {
             $order_id = $payment->getOrder()->getId();
             $order    = $this->getOrderbyOrderId($order_id);
-
-            $result = $this->_paymentData->getQueryResult($transactionId);
+            $result   = $this->_paymentData->getQueryResult($transactionId);
 
             if (isset($result['ns2PaymentType'])) {
                 $result['PAYMENT_TYPE_METHOD'] = $result['ns2PaymentType']['ns2Method'];
                 $result['PAYMENT_TYPE_DETAIL'] = $result['ns2PaymentType']['ns2Detail'];
             }
             unset($result['ns2PaymentType']);
+
+            // Flatten the nested arrays
+            $result = $this->arrayHelper->flattenArray((array)$result);
 
             $result['PAY_REQUEST_ID'] = $transactionId;
             $result['PAYMENT_TITLE']  = "PAYGATE_PAYHOST";
@@ -1012,8 +1020,10 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
             $data['ns2VaultId'],
             'payhost',
             $order->getCustomerId()
-        ) ?? $this->creditCardTokenFactory->create();
+        ) ?? $this->paymentTokenFactory->create();
+        $type         = PaymentTokenFactoryInterface::TOKEN_TYPE_CREDIT_CARD;
 
+        $paymentToken->setType($type);
         $paymentToken->setGatewayToken($data['ns2VaultId']);
         $last4 = substr($data['ns2PayVaultData'][0]['ns2value'], -4);
         $month = substr($data['ns2PayVaultData'][1]['ns2value'], 0, 2);
@@ -1021,7 +1031,7 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
         $paymentToken->setTokenDetails(
             json_encode(
                 [
-                    'type'           => $data['ns2PaymentType']['ns2Detail'],
+                    'type'           => $type,
                     'maskedCC'       => $last4,
                     'expirationDate' => "$month/$year",
                 ]
@@ -1039,7 +1049,7 @@ class PayGate extends AbstractExtensibleModel implements MethodInterface, Paymen
         $this->paymentTokenRepository->save($paymentToken);
 
         /* Retrieve Payment Token */
-        $this->creditCardTokenFactory->create();
+        $this->paymentTokenFactory->create();
         $this->addLinkToOrderPayment($paymentToken->getEntityId(), $order->getPayment()->getEntityId());
     }
 

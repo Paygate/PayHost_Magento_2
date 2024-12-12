@@ -34,6 +34,12 @@
                     <label>Test Mode</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                 </field>
+                <field id="ipn_method" translate="label" type="select" sortOrder="6" showInDefault="1" showInWebsite="1"
+                       showInStore="0">
+                    <label>Disable IPN</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Disable IPN notify method and use redirect method instead.</comment>
+                </field>
                 <field id="encryption_key" translate="label" type="text" sortOrder="4" showInDefault="1"
                        showInWebsite="1" showInStore="1">
                     <label>Secret Key</label>
@@ -84,6 +90,11 @@
                        showInStore="1">
                     <label>Sort Order</label>
                     <frontend_class>validate-number</frontend_class>
+                </field>
+                <field id="debug_cron" translate="label" type="select" sortOrder="14" showInDefault="1"
+                       showInWebsite="1" showInStore="0">
+                    <label>Debug Cron</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                 </field>
             </group>
         </section>

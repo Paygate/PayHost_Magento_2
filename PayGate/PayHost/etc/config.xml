@@ -17,7 +17,8 @@
                 <title>Paygate Payhost</title>
                 <instructions>Pay via Paygate</instructions>
                 <payment_action>Authorization</payment_action>
-                <test>1</test>
+                <test_mode>1</test_mode>
+                <ipn_method>0</ipn_method>
                 <model>PayGate\PayHost\Model\PayGate</model>
                 <can_authorize_vault>1</can_authorize_vault>
                 <is_gateway>0</is_gateway>
@@ -27,6 +28,7 @@
                 <can_void>1</can_void>
                 <can_refund>0</can_refund>
                 <can_use_for_multishipping>1</can_use_for_multishipping>
+                <debug_cron>0</debug_cron>
             </payhost>
         </payment>
     </default>

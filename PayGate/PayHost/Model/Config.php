@@ -14,7 +14,7 @@ use Magento\Directory\Helper\Data;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\UrlInterface;
 use Magento\Framework\View\Asset\Repository;
-use Magento\Payment\Model\Method\AbstractMethod;
+use Magento\Payment\Model\MethodInterface;
 use Magento\Store\Model\ScopeInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -214,13 +214,13 @@ class Config extends AbstractConfig
 
         switch ($action) {
             case self::PAYMENT_ACTION_AUTH:
-                $paymentAction = AbstractMethod::ACTION_AUTHORIZE;
+                $paymentAction = MethodInterface::ACTION_AUTHORIZE;
                 break;
             case self::PAYMENT_ACTION_SALE:
-                $paymentAction = AbstractMethod::ACTION_AUTHORIZE_CAPTURE;
+                $paymentAction = MethodInterface::ACTION_AUTHORIZE_CAPTURE;
                 break;
             case self::PAYMENT_ACTION_ORDER:
-                $paymentAction = AbstractMethod::ACTION_ORDER;
+                $paymentAction = MethodInterface::ACTION_ORDER;
                 break;
             default:
                 $this->_logger->debug($pre . $action . " could not be classified.");
